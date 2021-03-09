@@ -64,7 +64,7 @@ class LocationsIndexPage(Page):
         # tags
         tags = {}
         for tag in Tag.objects.all():
-            tags[tag] =  LocationPage.objects.filter(tags__name=tag).live()
+            tags[tag] =  LocationPage.objects.filter(tags__name=tag).live().descendant_of(self)
         context['locationpagetags'] = tags
         # locations near me
         locationsnearme = []
@@ -79,6 +79,8 @@ class LocationsIndexPage(Page):
                         if d <= self.max_dist_km:
                             locationsnearme.append(page)
         context['locationsnearme'] = locationsnearme
+        # the first tag index page which is a child of this page
+        context['tagspage'] = LocationTagIndexPage.objects.live().child_of(self).first()
         return context
 
     content_panels = Page.content_panels + [
@@ -164,6 +166,12 @@ class LocationPage(Page):
         )
     ]
 
+    def get_context(self, request):
+        context = super().get_context(request)
+        # the first tag index page which is a child of the parent location index of this page
+        context['tagspage'] = LocationTagIndexPage.objects.live().child_of(LocationsIndexPage.objects.live().ancestor_of(self).first()).first()
+        return context
+
 class LocationPageGalleryImage(Orderable):
     page = ParentalKey(LocationPage, on_delete=models.CASCADE, related_name='gallery_images')
     image = models.ForeignKey(
@@ -182,7 +190,8 @@ class LocationTagIndexPage(Page):
 
         # Filter by tag
         tag = request.GET.get('tag')
-        locationpages = LocationPage.objects.filter(tags__name=tag).live()
+        # the location pages which are descendants of the parent page
+        locationpages = LocationPage.objects.filter(tags__name=tag).live().descendant_of(self.get_parent())
 
         # Update template context
         context = super().get_context(request)
